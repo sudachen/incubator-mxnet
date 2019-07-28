@@ -17,13 +17,20 @@
 
 ROOTDIR = $(CURDIR)
 TPARTYDIR = $(ROOTDIR)/3rdparty
+export MXNET_LIBDIR = /opt/mxnet/lib
+export MXNET_INCLDIR = /opt/mxnet/include
 
 ifeq ($(OS),Windows_NT)
-	UNAME_S := Windows
+	$(error Windows is unsupported)
 else
 	UNAME_S := $(shell uname -s)
 	UNAME_P := $(shell uname -p)
 endif
+
+MKL_USE_STATIC_LIBS = 0
+USE_OPENCV = 0
+USE_OPENMP = 1
+USE_CUDNN = 0
 
 ifndef config
 ifdef CXXNET_CONFIG
@@ -59,26 +66,15 @@ endif
 # use customized config file
 include $(config)
 
-ifndef USE_MKLDNN
-ifneq ($(UNAME_S), Darwin)
-ifneq ($(UNAME_S), Windows)
-ifeq ($(UNAME_P), x86_64)
-	USE_MKLDNN=1
-endif
-endif
-endif
-endif
-
-ifeq ($(USE_MKL2017), 1)
-$(warning "USE_MKL2017 is deprecated. We will switch to USE_MKLDNN.")
-	USE_MKLDNN=1
-endif
-
-ifeq ($(USE_MKLDNN), 1)
-	MKLDNNROOT = $(ROOTDIR)/3rdparty/mkldnn/build/install
-	MKLROOT = $(ROOTDIR)/3rdparty/mkldnn/build/install
-	export USE_MKLML = 1
-endif
+export USE_MKLDNN = 1
+export MKLDNNROOT = $(ROOTDIR)/build/mkldnn
+export MKLROOT = /opt/intel/mkl
+export USE_MKLML = 1
+export USE_BLAS = mkl
+export USE_INTEL_PATH=/opt/intel
+export USE_STATIC_MKL = 1
+export USE_JEMALLOC_STATIC = 1
+export USE_JEMALLOC_PATH = $(ROOTDIR)/3rdparty/jemalloc/lib
 
 include $(TPARTYDIR)/mshadow/make/mshadow.mk
 include $(DMLC_CORE)/make/dmlc.mk
@@ -94,9 +90,9 @@ endif
 
 # CFLAGS for debug
 ifeq ($(DEBUG), 1)
-	CFLAGS += -g -O0 -D_GLIBCXX_ASSERTIONS
+	CFLAGS += -g -O0 -D_GLIBCXX_ASSERTIONS 
 else
-	CFLAGS += -O3 -DNDEBUG=1
+	CFLAGS += -O3 -DNDEBUG=1 -march=core-avx2 
 endif
 CFLAGS += -I$(TPARTYDIR)/mshadow/ -I$(TPARTYDIR)/dmlc-core/include -fPIC -I$(NNVM_PATH)/include -I$(DLPACK_PATH)/include -I$(TPARTYDIR)/tvm/include -Iinclude $(MSHADOW_CFLAGS)
 LDFLAGS = -pthread $(MSHADOW_LDFLAGS) $(DMLC_LDFLAGS)
@@ -206,7 +202,7 @@ endif
 #   -  for rhel7.2, try installing the package `lapack-static` via yum will dismiss this warning.
 # silently switching lapack off instead of letting the build fail because of backward compatibility
 ifeq ($(USE_LAPACK), 1)
-ifeq ($(USE_BLAS),$(filter $(USE_BLAS),blas openblas atlas mkl))
+ifeq ($(USE_BLAS),$(filter $(USE_BLAS),blas openblas atlas))
 ifeq (,$(wildcard $(USE_LAPACK_PATH)/liblapack.a))
 ifeq (,$(wildcard $(USE_LAPACK_PATH)/liblapack.so))
 ifeq (,$(wildcard /lib/liblapack.a))
@@ -233,7 +229,7 @@ ifeq ($(USE_LAPACK), 1)
 	ifneq ($(USE_LAPACK_PATH), )
 		LDFLAGS += -L$(USE_LAPACK_PATH)
 	endif
-	ifeq ($(USE_BLAS),$(filter $(USE_BLAS),blas openblas atlas mkl))
+	ifeq ($(USE_BLAS),$(filter $(USE_BLAS),blas openblas atlas))
 		LDFLAGS += -llapack
 	endif
 	CFLAGS += -DMXNET_USE_LAPACK
@@ -445,7 +441,8 @@ endif
 .PHONY: clean all extra-packages test lint docs clean_all rcpplint rcppexport roxygen\
 	cython2 cython3 cython cyclean
 
-all: lib/libmxnet.a lib/libmxnet.so $(BIN) extra-packages
+#all: lib/libmxnet.a lib/libmxnet.so $(BIN) extra-packages
+all: lib/libmxnet_cpu.so 
 
 SRC = $(wildcard src/*/*/*/*.cc src/*/*/*.cc src/*/*.cc src/*.cc)
 OBJ = $(patsubst %.cc, build/%.o, $(SRC))
@@ -561,23 +558,40 @@ ifeq ($(UNAME_S), Darwin)
         LDFLAGS += -Wl,-install_name,@rpath/libmxnet.so
 endif
 
+install: lib/libmxnet_cpu.so
+	mkdir -p /opt/mxnet/lib
+	cp $^ /opt/mxnet/lib
+	mkdir -p /opt/mxnet/include
+	cp -r include/mxnet /opt/mxnet/include
+	chmod -x -R /opt/mxnet/include/mxnet/*
+	cp /opt/intel/lib/intel64/libiomp5.so /opt/mxnet/lib
+	ln -sF libmxnet_cpu.so /opt/mxnet/lib/libmxnet.so
+
 # NOTE: to statically link libmxnet.a we need the option
 # --Wl,--whole-archive -lmxnet --Wl,--no-whole-archive
-lib/libmxnet.a: $(ALLX_DEP)
-	@mkdir -p $(@D)
-	ar crv $@ $(filter %.o, $?)
+#lib/libmxnet.a: $(ALLX_DEP)
+#	@mkdir -p $(@D)
+#	ar crv $@ $(filter %.o, $?)
 
-lib/libmxnet.so: $(ALLX_DEP)
+lib/libmxnet_cpu.so: $(ALLX_DEP)
 	@mkdir -p $(@D)
-	$(CXX) $(CFLAGS) -shared -o $@ $(filter-out %libnnvm.a, $(filter %.o %.a, $^)) $(LDFLAGS) \
-	-Wl,${WHOLE_ARCH} $(filter %libnnvm.a, $^) -Wl,${NO_WHOLE_ARCH}
-ifeq ($(USE_MKLDNN), 1)
-ifeq ($(UNAME_S), Darwin)
-	install_name_tool -change '@rpath/libmklml.dylib' '@loader_path/libmklml.dylib' $@
-	install_name_tool -change '@rpath/libiomp5.dylib' '@loader_path/libiomp5.dylib' $@
-	install_name_tool -change '@rpath/libmkldnn.0.dylib' '@loader_path/libmkldnn.0.dylib' $@
-endif
-endif
+	$(CXX) $(CFLAGS) \
+		-shared -o $@ \
+		-Wl,--gc-sections \
+		$(filter-out %libnnvm.a, $(filter %.o %.a, $^)) \
+		$(LDFLAGS) \
+		-Wl,${WHOLE_ARCH} \
+		$(filter %libnnvm.a, $^) \
+		-Wl,${NO_WHOLE_ARCH} \
+		${MKLROOT}/lib/intel64/libmkl_intel_lp64.a \
+		${MKLROOT}/lib/intel64/libmkl_core.a \
+		${MKLROOT}/lib/intel64/libmkl_intel_thread.a \
+		${MKLROOT}/lib/intel64/libmkl_core.a \
+		${MKLROOT}/lib/intel64/libmkl_intel_thread.a \
+		${MKLROOT}/lib/intel64/libmkl_core.a \
+		${USE_INTEL_PATH}/lib/intel64/libiomp5.a \
+		-ldl -lpthread -lm 
+
 
 $(PS_PATH)/build/libps.a: PSLITE
 
@@ -632,97 +646,9 @@ clean_docs:
 doxygen:
 	doxygen docs/Doxyfile
 
-# Cython build
-cython:
-	cd python; $(PYTHON) setup.py build_ext --inplace --with-cython
-
-cython2:
-	cd python; python2 setup.py build_ext --inplace --with-cython
-
-cython3:
-	cd python; python3 setup.py build_ext --inplace --with-cython
-
-cyclean:
-	rm -rf python/mxnet/*/*.so python/mxnet/*/*.cpp
-
-# R related shortcuts
-rcpplint:
-	3rdparty/dmlc-core/scripts/lint.py mxnet-rcpp ${LINT_LANG} R-package/src
-
-rpkg:
-	mkdir -p R-package/inst/libs
-	cp src/io/image_recordio.h R-package/src
-	cp -rf lib/libmxnet.so R-package/inst/libs
-
-	if [ -e "lib/libmkldnn.so.0" ]; then \
-		cp -rf lib/libmkldnn.so.0 R-package/inst/libs; \
-		cp -rf lib/libiomp5.so R-package/inst/libs; \
-		cp -rf lib/libmklml_intel.so R-package/inst/libs; \
-	fi
-
-	mkdir -p R-package/inst/include
-	cp -rl include/* R-package/inst/include
-	Rscript -e "if(!require(devtools)){install.packages('devtools', repo = 'https://cloud.r-project.org/')}"
-	Rscript -e "if(!require(roxygen2)||packageVersion('roxygen2') < '6.1.1'){install.packages('roxygen2', repo = 'https://cloud.r-project.org/')}"
-	Rscript -e "library(devtools); library(methods); options(repos=c(CRAN='https://cloud.r-project.org/')); install_deps(pkg='R-package', dependencies = TRUE)"
-	cp R-package/dummy.NAMESPACE R-package/NAMESPACE
-	echo "import(Rcpp)" >> R-package/NAMESPACE
-	R CMD INSTALL R-package
-	Rscript -e "require(mxnet); mxnet:::mxnet.export('R-package'); warnings()"
-	rm R-package/NAMESPACE
-	Rscript -e "devtools::document('R-package');warnings()"
-	R CMD INSTALL R-package
-
-rpkgtest:
-	Rscript -e 'require(testthat);res<-test_dir("R-package/tests/testthat");if(!testthat:::all_passed(res)){stop("Test failures", call. = FALSE)}'
-	Rscript -e 'res<-covr:::package_coverage("R-package");fileConn<-file(paste("r-package_coverage_",toString(runif(1)),".json"));writeLines(covr:::to_codecov(res), fileConn);close(fileConn)'
-
-scalaclean:
-	(cd $(ROOTDIR)/scala-package && mvn clean)
-
-scalapkg:
-	(cd $(ROOTDIR)/scala-package && mvn install -DskipTests)
-
-scalainstall:
-	(cd $(ROOTDIR)/scala-package && mvn install)
-
-scalaunittest:
-	(cd $(ROOTDIR)/scala-package && mvn install)
-
-scalaintegrationtest:
-	(cd $(ROOTDIR)/scala-package && mvn integration-test -DskipTests=false)
-
-jnilint:
-	3rdparty/dmlc-core/scripts/lint.py mxnet-jnicpp cpp scala-package/native/src --exclude_path scala-package/native/src/main/native/org_apache_mxnet_native_c_api.h
-
-rclean:
-	$(RM) -r R-package/src/image_recordio.h R-package/NAMESPACE R-package/man R-package/R/mxnet_generated.R \
-		R-package/inst R-package/src/*.o R-package/src/*.so mxnet_*.tar.gz
-
-build/rat/apache-rat/target/apache-rat-0.13-SNAPSHOT.jar:
-	mkdir -p build
-	svn co http://svn.apache.org/repos/asf/creadur/rat/branches/0.12-release/ build/rat; \
-	cd build/rat; \
-	mvn -Dmaven.test.skip=true install;
-
-ratcheck: build/rat/apache-rat/target/apache-rat-0.13-SNAPSHOT.jar
-	exec 5>&1; \
-	RAT_JAR=build/rat/apache-rat/target/apache-rat-0.13-SNAPSHOT.jar; \
-	OUTPUT=$(java -jar $(RAT_JAR) -E tests/nightly/apache_rat_license_check/rat-excludes -d .|tee >(cat - >&5)); \
-    ERROR_MESSAGE="Printing headers for text files without a valid license header"; \
-    echo "-------Process The Output-------"; \
-    if [[ $OUTPUT =~ $ERROR_MESSAGE ]]; then \
-        echo "ERROR: RAT Check detected files with unknown licenses. Please fix and run test again!"; \
-        exit 1; \
-    else \
-        echo "SUCCESS: There are no files with an Unknown License."; \
-    fi
-
-
 ifneq ($(EXTRA_OPERATORS),)
-clean: rclean cyclean $(EXTRA_PACKAGES_CLEAN)
+clean: $(EXTRA_PACKAGES_CLEAN)
 	$(RM) -r build lib bin deps *~ */*~ */*/*~ */*/*/*~ 
-	(cd scala-package && mvn clean) || true
 	cd $(DMLC_CORE); $(MAKE) clean; cd -
 	cd $(PS_PATH); $(MAKE) clean; cd -
 	cd $(NNVM_PATH); $(MAKE) clean; cd -
@@ -730,9 +656,8 @@ clean: rclean cyclean $(EXTRA_PACKAGES_CLEAN)
 	$(RM) -r  $(patsubst %, %/*.d, $(EXTRA_OPERATORS)) $(patsubst %, %/*/*.d, $(EXTRA_OPERATORS))
 	$(RM) -r  $(patsubst %, %/*.o, $(EXTRA_OPERATORS)) $(patsubst %, %/*/*.o, $(EXTRA_OPERATORS))
 else
-clean: rclean mkldnn_clean cyclean testclean $(EXTRA_PACKAGES_CLEAN)
+clean: mkldnn_clean testclean $(EXTRA_PACKAGES_CLEAN)
 	$(RM) -r build lib bin *~ */*~ */*/*~ */*/*/*~ 
-	(cd scala-package && mvn clean) || true
 	cd $(DMLC_CORE); $(MAKE) clean; cd -
 	cd $(PS_PATH); $(MAKE) clean; cd -
 	cd $(NNVM_PATH); $(MAKE) clean; cd -

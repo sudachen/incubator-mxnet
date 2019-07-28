@@ -18,42 +18,40 @@
 ifeq ($(USE_MKLDNN), 1)
 	MKLDNN_SUBMODDIR = $(ROOTDIR)/3rdparty/mkldnn
 	MKLDNN_BUILDDIR = $(MKLDNN_SUBMODDIR)/build
-	MXNET_LIBDIR = $(ROOTDIR)/lib
-	MXNET_INCLDIR = $(ROOTDIR)/include
-ifeq ($(UNAME_S), Darwin)
-	OMP_LIBFILE = $(MKLDNNROOT)/lib/libiomp5.dylib
-	MKLML_LIBFILE = $(MKLDNNROOT)/lib/libmklml.dylib
-	MKLDNN_LIBFILE = $(MKLDNNROOT)/lib/libmkldnn.0.dylib
-	MKLDNN_LIB64FILE = $(MKLDNNROOT)/lib64/libmkldnn.0.dylib
+	OMP_LIBFILE = /opt/intel/lib/intel64/libiomp5.so
+	MKLDNN_LIBFILE = $(MKLDNNROOT)/lib/libmkldnn.a
 else
-	OMP_LIBFILE = $(MKLDNNROOT)/lib/libiomp5.so
-	MKLML_LIBFILE = $(MKLDNNROOT)/lib/libmklml_intel.so
-	MKLDNN_LIBFILE = $(MKLDNNROOT)/lib/libmkldnn.so.0
-	MKLDNN_LIB64FILE = $(MKLDNNROOT)/lib64/libmkldnn.so.0
-endif
+	$(warning is not used)	
 endif
 
 .PHONY: mkldnn mkldnn_clean
 
-mkldnn_build: $(MKLDNN_LIBFILE)
+mkldnn_build: $(MKLDNN_LIBFILE) $(MKLDNNROOT)/include/mkldnn.hpp 
 
-$(MKLDNN_LIBFILE):
+$(MKLDNN_LIBFILE) $(MKLDNNROOT)/include/mkldnn.hpp: $(ROOTDIR)/mkldnn.mk
 	mkdir -p $(MKLDNNROOT)
-	cd $(MKLDNN_SUBMODDIR) && rm -rf external && cd scripts && ./prepare_mkl.sh && cd .. && cp -a external/*/* $(MKLDNNROOT)/.
-	cmake $(MKLDNN_SUBMODDIR) -DCMAKE_INSTALL_PREFIX=$(MKLDNNROOT) -B$(MKLDNN_BUILDDIR) -DARCH_OPT_FLAGS="-mtune=generic" -DWITH_TEST=OFF -DWITH_EXAMPLE=OFF
-	$(MAKE) -C $(MKLDNN_BUILDDIR) VERBOSE=1
+	#cd $(MKLDNN_SUBMODDIR) && rm -rf external && cd scripts && ./prepare_mkl.sh && cd .. && cp -a external/*/* $(MKLDNNROOT)/.
+	cmake $(MKLDNN_SUBMODDIR) \
+		-DCMAKE_INSTALL_PREFIX=$(MKLDNNROOT) \
+		-B$(MKLDNN_BUILDDIR) \
+		-DARCH_OPT_FLAGS="-march=core-avx2" \
+		-DWITH_TEST=OFF \
+		-DWITH_EXAMPLE=OFF \
+		-DMKLDNN_LIBRARY_TYPE=STATIC \
+		-DMKLDNN_CPU_RUNTIME=OMP \
+		-DMKLROOT=/opt/intel/mkl \
+		-DMKLDNN_USE_MKL=FULL:STATIC \
+		-DIOMP5LIB=/opt/intel/lib/intel64/libiomp5.a \
+		-DMKLIOMP5LIB=/opt/intel/lib/intel64/libiomp5.a
+
+
+	$(MAKE) -j6 -C $(MKLDNN_BUILDDIR) VERBOSE=1
 	$(MAKE) -C $(MKLDNN_BUILDDIR) install
-	if [ -f "$(MKLDNN_LIB64FILE)" ]; then \
-		mv $(MKLDNNROOT)/lib64/libmkldnn* $(MKLDNNROOT)/lib/; \
-	fi
 	mkdir -p $(MXNET_LIBDIR)
-	cp $(OMP_LIBFILE) $(MXNET_LIBDIR)
-	cp $(MKLML_LIBFILE) $(MXNET_LIBDIR)
-	cp $(MKLDNN_LIBFILE) $(MXNET_LIBDIR)
-	cp $(MKLDNN_BUILDDIR)/include/mkldnn_version.h $(MXNET_INCLDIR)/mkldnn/.
+	#cp $(OMP_LIBFILE) $(MXNET_LIBDIR)
 mkldnn_clean:
 	$(RM) -r 3rdparty/mkldnn/build
-	$(RM) -r $(MKLDNNROOT)
+	#$(RM) -r $(MKLDNNROOT)
 
 ifeq ($(USE_MKLDNN), 1)
 mkldnn: mkldnn_build

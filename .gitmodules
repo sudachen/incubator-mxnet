@@ -29,3 +29,6 @@
 [submodule "3rdparty/nvidia_cub"]
 	path = 3rdparty/nvidia_cub
 	url = https://github.com/NVlabs/cub.git
+[submodule "3rdparty/jemalloc"]
+	path = 3rdparty/jemalloc
+	url = git@github.com:jemalloc/jemalloc.git
