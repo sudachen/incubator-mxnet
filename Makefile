@@ -30,7 +30,7 @@ endif
 MKL_USE_STATIC_LIBS = 0
 USE_OPENCV = 0
 USE_OPENMP = 1
-USE_CUDNN = 0
+USE_CUDNN = 1
 
 ifndef config
 ifdef CXXNET_CONFIG
@@ -442,7 +442,7 @@ endif
 	cython2 cython3 cython cyclean
 
 #all: lib/libmxnet.a lib/libmxnet.so $(BIN) extra-packages
-all: lib/libmxnet_cpu.so 
+all: lib/libmxnet_gpu.so 
 
 SRC = $(wildcard src/*/*/*/*.cc src/*/*/*.cc src/*/*.cc src/*.cc)
 OBJ = $(patsubst %.cc, build/%.o, $(SRC))
@@ -558,14 +558,14 @@ ifeq ($(UNAME_S), Darwin)
         LDFLAGS += -Wl,-install_name,@rpath/libmxnet.so
 endif
 
-install: lib/libmxnet_cpu.so
+install: lib/libmxnet_gpu.so
 	mkdir -p /opt/mxnet/lib
 	cp $^ /opt/mxnet/lib
 	mkdir -p /opt/mxnet/include
 	cp -r include/mxnet /opt/mxnet/include
 	chmod -x -R /opt/mxnet/include/mxnet/*
-	cp /opt/intel/lib/intel64/libiomp5.so /opt/mxnet/lib
-	ln -sF libmxnet_cpu.so /opt/mxnet/lib/libmxnet.so
+	#cp /opt/intel/lib/intel64/libiomp5.so /opt/mxnet/lib
+	#ln -sF libmxnet_cpu.so /opt/mxnet/lib/libmxnet.so
 
 # NOTE: to statically link libmxnet.a we need the option
 # --Wl,--whole-archive -lmxnet --Wl,--no-whole-archive
@@ -573,7 +573,7 @@ install: lib/libmxnet_cpu.so
 #	@mkdir -p $(@D)
 #	ar crv $@ $(filter %.o, $?)
 
-lib/libmxnet_cpu.so: $(ALLX_DEP)
+lib/libmxnet_gpu.so: $(ALLX_DEP)
 	@mkdir -p $(@D)
 	$(CXX) $(CFLAGS) \
 		-shared -o $@ \
