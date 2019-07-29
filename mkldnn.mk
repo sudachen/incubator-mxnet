@@ -18,7 +18,7 @@
 ifeq ($(USE_MKLDNN), 1)
 	MKLDNN_SUBMODDIR = $(ROOTDIR)/3rdparty/mkldnn
 	MKLDNN_BUILDDIR = $(MKLDNN_SUBMODDIR)/build
-	OMP_LIBFILE = /opt/intel/lib/intel64/libiomp5.so
+	#OMP_LIBFILE = /opt/intel/lib/intel64/libiomp5.so
 	MKLDNN_LIBFILE = $(MKLDNNROOT)/lib/libmkldnn.a
 else
 	$(warning is not used)	
@@ -38,12 +38,9 @@ $(MKLDNN_LIBFILE) $(MKLDNNROOT)/include/mkldnn.hpp: $(ROOTDIR)/mkldnn.mk
 		-DWITH_TEST=OFF \
 		-DWITH_EXAMPLE=OFF \
 		-DMKLDNN_LIBRARY_TYPE=STATIC \
-		-DMKLDNN_CPU_RUNTIME=OMP \
 		-DMKLROOT=/opt/intel/mkl \
 		-DMKLDNN_USE_MKL=FULL:STATIC \
-		-DIOMP5LIB=/opt/intel/lib/intel64/libiomp5.a \
-		-DMKLIOMP5LIB=/opt/intel/lib/intel64/libiomp5.a
-
+		-DMKLDNN_THREADING=OMP
 
 	$(MAKE) -j6 -C $(MKLDNN_BUILDDIR) VERBOSE=1
 	$(MAKE) -C $(MKLDNN_BUILDDIR) install

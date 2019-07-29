@@ -74,7 +74,7 @@ export USE_BLAS = mkl
 export USE_INTEL_PATH=/opt/intel
 export USE_STATIC_MKL = 1
 export USE_JEMALLOC_STATIC = 1
-export USE_JEMALLOC_PATH = $(ROOTDIR)/3rdparty/jemalloc/lib
+export USE_JEMALLOC_PATH = $(ROOTDIR)
 
 include $(TPARTYDIR)/mshadow/make/mshadow.mk
 include $(DMLC_CORE)/make/dmlc.mk
@@ -564,8 +564,7 @@ install: lib/libmxnet_cpu.so
 	mkdir -p /opt/mxnet/include
 	cp -r include/mxnet /opt/mxnet/include
 	chmod -x -R /opt/mxnet/include/mxnet/*
-	cp /opt/intel/lib/intel64/libiomp5.so /opt/mxnet/lib
-	ln -sF libmxnet_cpu.so /opt/mxnet/lib/libmxnet.so
+	ln -sf libmxnet_cpu.so /opt/mxnet/lib/libmxnet.so
 
 # NOTE: to statically link libmxnet.a we need the option
 # --Wl,--whole-archive -lmxnet --Wl,--no-whole-archive
@@ -585,13 +584,11 @@ lib/libmxnet_cpu.so: $(ALLX_DEP)
 		-Wl,${NO_WHOLE_ARCH} \
 		${MKLROOT}/lib/intel64/libmkl_intel_lp64.a \
 		${MKLROOT}/lib/intel64/libmkl_core.a \
-		${MKLROOT}/lib/intel64/libmkl_intel_thread.a \
+		${MKLROOT}/lib/intel64/libmkl_gnu_thread.a \
 		${MKLROOT}/lib/intel64/libmkl_core.a \
-		${MKLROOT}/lib/intel64/libmkl_intel_thread.a \
+		${MKLROOT}/lib/intel64/libmkl_gnu_thread.a \
 		${MKLROOT}/lib/intel64/libmkl_core.a \
-		${USE_INTEL_PATH}/lib/intel64/libiomp5.a \
 		-ldl -lpthread -lm 
-
 
 $(PS_PATH)/build/libps.a: PSLITE
 
@@ -621,6 +618,8 @@ endif
 
 include mkldnn.mk
 include tests/cpp/unittest.mk
+
+
 
 extra-packages: $(EXTRA_PACKAGES)
 
