@@ -365,6 +365,7 @@ endif
 
 # Guard against displaying nvcc info messages to users not using CUDA.
 ifeq ($(USE_CUDA), 1)
+	CFLAGS += -DMXNET_USE_CUDA=1
 	# Get AR version, compare with expected ar version and find bigger and smaller version of the two
 	AR_VERSION := $(shell ar --version | egrep -o "([0-9]{1,}\.)+[0-9]{1,}")
 	EXPECTED_AR_VERSION := $(shell echo "2.27")
@@ -566,7 +567,8 @@ install: lib/libmxnet_gpu.so
 	cp -r include/mxnet /opt/mxnet/include
 	chmod -x -R /opt/mxnet/include/mxnet/*
 	#cp /opt/intel/lib/intel64/libiomp5.so /opt/mxnet/lib
-	#ln -sF libmxnet_cpu.so /opt/mxnet/lib/libmxnet.so
+	#ln -sf libmxnet_cpu.so /opt/mxnet/lib/libmxnet.so
+	ln -sf libmxnet_gpu.so /opt/mxnet/lib/libmxnet.so
 
 # NOTE: to statically link libmxnet.a we need the option
 # --Wl,--whole-archive -lmxnet --Wl,--no-whole-archive
@@ -586,15 +588,20 @@ lib/libmxnet_gpu.so: $(ALLX_DEP)
 		-Wl,${NO_WHOLE_ARCH} \
 		${MKLROOT}/lib/intel64/libmkl_intel_lp64.a \
 		${MKLROOT}/lib/intel64/libmkl_core.a \
-		${MKLROOT}/lib/intel64/libmkl_intel_thread.a \
+		${MKLROOT}/lib/intel64/libmkl_gnu_thread.a \
 		${MKLROOT}/lib/intel64/libmkl_core.a \
-		${MKLROOT}/lib/intel64/libmkl_intel_thread.a \
+		${MKLROOT}/lib/intel64/libmkl_gnu_thread.a \
 		${MKLROOT}/lib/intel64/libmkl_core.a \
-		${USE_INTEL_PATH}/lib/intel64/libiomp5.a \
 		-Wl,-rpath=/opt/mxnet/lib \
 		-Wl,-rpath=/opt/mxnet/lib/cuda \
 		-ldl -lpthread -lm 
 
+dist: install
+	7z a -mx9 -snl -spf libmxnet_gpu.7z \
+		/opt/mxnet/include \
+		/opt/mxnet/lib/libmxnet_gpu.so \
+		/opt/mxnet/lib/libmxnet.so \
+		/opt/mxnet/lib/cuda
 
 $(PS_PATH)/build/libps.a: PSLITE
 

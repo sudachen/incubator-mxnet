@@ -98,7 +98,7 @@ def _parse_mxnet_context(ctx):
 
     if ctx.lower() in ['cpu', 'gpu']:
         return mx.context.Context(ctx)
-    elif ctx.lower().startwith('gpu('):
+    elif ctx.lower().startswith('gpu('):
         device_id = int(ctx[4:-1])
         return mx.gpu(device_id)
 
