@@ -75,7 +75,7 @@ export USE_BLAS = mkl
 export USE_INTEL_PATH=/opt/intel
 export USE_STATIC_MKL = 1
 export USE_JEMALLOC_STATIC = 1
-export USE_JEMALLOC_PATH = $(ROOTDIR)/3rdparty/jemalloc/lib
+export USE_JEMALLOC_PATH = $(ROOTDIR)
 
 include $(TPARTYDIR)/mshadow/make/mshadow.mk
 include $(DMLC_CORE)/make/dmlc.mk
