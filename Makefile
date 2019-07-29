@@ -590,6 +590,12 @@ lib/libmxnet_cpu.so: $(ALLX_DEP)
 		${MKLROOT}/lib/intel64/libmkl_core.a \
 		-ldl -lpthread -lm 
 
+dist: install
+	7z a -mx9 -snl -spf libmxnet_cpu.7z \
+		/opt/mxnet/include \
+		/opt/mxnet/lib/libmxnet_cpu.so \
+		/opt/mxnet/lib/libmxnet.so 
+
 $(PS_PATH)/build/libps.a: PSLITE
 
 PSLITE:
