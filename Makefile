@@ -42,6 +42,7 @@ else
 endif
 endif
 
+USE_SSE=1
 ifndef DMLC_CORE
 	DMLC_CORE = $(TPARTYDIR)/dmlc-core
 endif
@@ -236,7 +237,7 @@ ifeq ($(USE_LAPACK), 1)
 endif
 
 ifeq ($(USE_CUDNN), 1)
-	CFLAGS += -DMSHADOW_USE_CUDNN=1
+	CFLAGS += -DMSHADOW_USE_CUDNN=1 -DMXNET_USE_CUDNN=1
 	LDFLAGS += -lcudnn
 endif
 
@@ -590,6 +591,8 @@ lib/libmxnet_gpu.so: $(ALLX_DEP)
 		${MKLROOT}/lib/intel64/libmkl_intel_thread.a \
 		${MKLROOT}/lib/intel64/libmkl_core.a \
 		${USE_INTEL_PATH}/lib/intel64/libiomp5.a \
+		-Wl,-rpath=/opt/mxnet/lib \
+		-Wl,-rpath=/opt/mxnet/lib/cuda \
 		-ldl -lpthread -lm 
 
 
