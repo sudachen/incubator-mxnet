@@ -76,6 +76,7 @@ export USE_INTEL_PATH=/opt/intel
 export USE_STATIC_MKL = 1
 export USE_JEMALLOC_STATIC = 1
 export USE_JEMALLOC_PATH = $(ROOTDIR)
+export CUDA_PATH = $(USE_CUDA_PATH)
 
 include $(TPARTYDIR)/mshadow/make/mshadow.mk
 include $(DMLC_CORE)/make/dmlc.mk
@@ -238,7 +239,7 @@ endif
 
 ifeq ($(USE_CUDNN), 1)
 	CFLAGS += -DMSHADOW_USE_CUDNN=1 -DMXNET_USE_CUDNN=1
-	LDFLAGS += -lcudnn
+	#LDFLAGS += -lcudnn
 endif
 
 ifeq ($(use_blas), open)
@@ -486,7 +487,7 @@ ALL_DEP = $(OBJ) $(EXTRA_OBJ) $(PLUGIN_OBJ) $(LIB_DEP)
 ifeq ($(USE_CUDA), 1)
 	CFLAGS += -I$(ROOTDIR)/3rdparty/nvidia_cub
 	ALL_DEP += $(CUOBJ) $(EXTRA_CUOBJ) $(PLUGIN_CUOBJ)
-	LDFLAGS += -lcufft
+	#LDFLAGS += -lcufft
 	ifeq ($(ENABLE_CUDA_RTC), 1)
 		LDFLAGS += -lcuda -lnvrtc
 		CFLAGS += -DMXNET_ENABLE_CUDA_RTC=1
@@ -580,28 +581,42 @@ lib/libmxnet_gpu.so: $(ALLX_DEP)
 	@mkdir -p $(@D)
 	$(CXX) $(CFLAGS) \
 		-shared -o $@ \
+		-Wl,--unresolved-symbols=report-all \
 		-Wl,--gc-sections \
 		$(filter-out %libnnvm.a, $(filter %.o %.a, $^)) \
 		$(LDFLAGS) \
 		-Wl,${WHOLE_ARCH} \
 		$(filter %libnnvm.a, $^) \
 		-Wl,${NO_WHOLE_ARCH} \
+		/usr/lib/x86_64-linux-gnu/libcudnn_static.a \
+		${CUDA_PATH}/lib64/libcufft_static_nocallback.a \
+		${CUDA_PATH}/lib64/libcurand_static.a \
+		${CUDA_PATH}/lib64/libcusolver_static.a \
+		${CUDA_PATH}/lib64/libcusparse_static.a \
+		${CUDA_PATH}/lib64/libcublas_static.a \
+		${CUDA_PATH}/lib64/libcudart_static.a \
 		${MKLROOT}/lib/intel64/libmkl_intel_lp64.a \
 		${MKLROOT}/lib/intel64/libmkl_core.a \
 		${MKLROOT}/lib/intel64/libmkl_gnu_thread.a \
 		${MKLROOT}/lib/intel64/libmkl_core.a \
 		${MKLROOT}/lib/intel64/libmkl_gnu_thread.a \
 		${MKLROOT}/lib/intel64/libmkl_core.a \
+		-lculibos \
 		-Wl,-rpath=/opt/mxnet/lib \
-		-Wl,-rpath=/opt/mxnet/lib/cuda \
 		-ldl -lpthread -lm 
 
+#		${CUDA_PATH}/lib64/libcufft_static.a \
+#		${CUDA_PATH}/lib64/libcurand_static.a \
+#		${CUDA_PATH}/lib64/libcusolver_static.a \
+#		${CUDA_PATH}/lib64/libcublas_static.a \
+#		${CUDA_PATH}/lib64/libcusparse_static.a \
+#		${CUDA_PATH}/lib64/libculibos.a \
+
 dist: install
+	rm libmxnet_gpu.7z || true
 	7z a -mx9 -snl -spf libmxnet_gpu.7z \
 		/opt/mxnet/include \
-		/opt/mxnet/lib/libmxnet_gpu.so \
-		/opt/mxnet/lib/libmxnet.so \
-		/opt/mxnet/lib/cuda
+		/opt/mxnet/lib/libmxnet_gpu.so 
 
 $(PS_PATH)/build/libps.a: PSLITE
 
